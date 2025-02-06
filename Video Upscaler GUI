@@ -1,0 +1,83 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox
+import cv2
+import subprocess
+from PIL import Image, ImageTk
+import threading
+
+# Function to select video file
+def select_file():
+    file_path = filedialog.askopenfilename(filetypes=[("Video Files", "*.mp4;*.avi;*.mov;*.mkv")])
+    if file_path:
+        file_label.config(text=f"Selected: {file_path}")
+        preview_frame(file_path)
+        return file_path
+
+# Function to extract and display a preview frame
+def preview_frame(video_path):
+    cap = cv2.VideoCapture(video_path)
+    ret, frame = cap.read()
+    cap.release()
+    if ret:
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = Image.fromarray(frame)
+        image.thumbnail((300, 300))
+        img_tk = ImageTk.PhotoImage(image)
+        preview_label.config(image=img_tk)
+        preview_label.image = img_tk
+    else:
+        messagebox.showerror("Error", "Could not extract preview frame.")
+
+# Function to upscale video using Real-ESRGAN
+def upscale_video():
+    if not file_label.cget("text").startswith("Selected"):
+        messagebox.showerror("Error", "No video selected!")
+        return
+    
+    scale_factor = scale_var.get()
+    model = model_var.get()
+    input_video = file_label.cget("text").replace("Selected: ", "")
+    output_video = input_video.replace(".", f"_upscaled_{scale_factor}x.")
+    
+    command = [
+        "realesrgan-ncnn-vulkan.exe",  # Path to Real-ESRGAN executable
+        "-i", input_video,
+        "-o", output_video,
+        "-s", str(scale_factor),
+        "-n", model
+    ]
+    
+    def run_upscaling():
+        subprocess.run(command)
+        messagebox.showinfo("Success", "Upscaling complete!")
+    
+    threading.Thread(target=run_upscaling, daemon=True).start()
+
+# GUI setup
+root = tk.Tk()
+root.title("AI Video Upscaler")
+root.geometry("500x500")
+
+# File selection
+file_label = tk.Label(root, text="No file selected", wraplength=400)
+file_label.pack()
+tk.Button(root, text="Select Video", command=select_file).pack()
+
+# Preview frame
+preview_label = tk.Label(root)
+preview_label.pack()
+
+# Scale selection
+scale_var = tk.IntVar(value=2)
+tk.Label(root, text="Upscale Factor:").pack()
+tk.OptionMenu(root, scale_var, 2, 4, 8).pack()
+
+# Model selection
+model_var = tk.StringVar(value="realesrgan-x4plus")
+tk.Label(root, text="Choose Model:").pack()
+tk.OptionMenu(root, model_var, "realesrgan-x4plus", "realesrgan-x4plus-anime").pack()
+
+# Upscale button
+tk.Button(root, text="Upscale Video", command=upscale_video).pack()
+
+root.mainloop()
